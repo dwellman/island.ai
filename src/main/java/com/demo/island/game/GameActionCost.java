@@ -14,6 +14,7 @@ public final class GameActionCost {
         return switch (type) {
             case MOVE_WALK -> walkCost(difficulty);
             case MOVE_RUN -> runCost(difficulty);
+            case JUMP -> walkCost(difficulty);
             case LOOK -> 1;
             case SEARCH -> 3;
             case PICK_UP -> 1;

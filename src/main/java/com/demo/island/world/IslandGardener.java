@@ -195,7 +195,7 @@ public final class IslandGardener {
     private static IslandTile copyWith(IslandTile tile, TerrainDifficulty difficulty, java.util.Set<TerrainFeature> features,
                                        TileSafety safety, boolean walkable,
                                        PlantFamily primary, java.util.List<PlantFamily> secondary, PlantDensity density) {
-        return new IslandTile(
+        IslandTile copy = new IslandTile(
                 tile.getTileId(),
                 tile.getKind(),
                 tile.getPosition(),
@@ -211,6 +211,9 @@ public final class IslandGardener {
                 density,
                 tile.getContext()
         );
+        copy.getThingsPresent().addAll(tile.getThingsPresent());
+        copy.getThingsAnchoredHere().addAll(tile.getThingsAnchoredHere());
+        return copy;
     }
 
     private static void smoothDifficulty(IslandMap map) {

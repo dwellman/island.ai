@@ -2,12 +2,14 @@ package com.demo.island.game;
 
 import com.demo.island.world.Direction8;
 import com.demo.island.world.GameOverReason;
-import com.demo.island.world.IslandMap;
 import com.demo.island.world.IslandTile;
 import com.demo.island.world.Position;
 import com.demo.island.world.TerrainDifficulty;
 import com.demo.island.world.TileSafety;
 import com.demo.island.world.WorldGeometry;
+import com.demo.island.world.WorldThingIndex;
+import com.demo.island.world.CharacterThing;
+import com.demo.island.world.Thing;
 
 import java.util.EnumMap;
 import java.util.Map;
@@ -17,8 +19,18 @@ import java.util.logging.Logger;
 public final class GameEngine {
 
     private static final Logger LOG = Logger.getLogger(GameEngine.class.getName());
+    private static ChallengeResolver challengeResolver = new ChallengeResolver(new DiceService());
+    private static DmAdapter dmAdapter = new DefaultDmAdapter();
 
     private GameEngine() {
+    }
+
+    static void setChallengeResolverForTests(ChallengeResolver resolver) {
+        challengeResolver = resolver;
+    }
+
+    static void setDmAdapterForTests(DmAdapter adapter) {
+        dmAdapter = adapter;
     }
 
     public static String buildIntroMessage(CosmosClock clock) {
@@ -27,150 +39,275 @@ public final class GameEngine {
 
     public static GameActionResult perform(GameSession session, GameAction action) {
         if (session.getStatus() != GameStatus.IN_PROGRESS) {
-            return new GameActionResult(false, prefix(session) + " Game is over.");
+            TurnContext ctx = TurnContextBuilder.build(session, action, "Game is over.", false, null, null);
+            String body = dmAdapter.narrate(ctx);
+            return new GameActionResult(false, prefix(session) + " " + body, ctx);
         }
 
+        ActionOutcome outcome;
         GameActionType type = action.getType();
         switch (type) {
-            case MOVE_WALK, MOVE_RUN:
-                return handleMove(session, action);
-            case LOOK:
+            case MOVE_WALK, MOVE_RUN -> outcome = handleMove(session, action);
+            case JUMP -> outcome = handleJump(session, action);
+            case LOOK -> {
                 applyTime(session, GameActionCost.timeCost(GameActionType.LOOK, currentDiff(session)));
                 checkOutOfTime(session);
-                return new GameActionResult(true, prefix(session) + " You take a quick look around.");
-            case SEARCH:
+                outcome = new ActionOutcome(true, "You take a quick look around.", null, null);
+            }
+            case SEARCH -> {
                 applyTime(session, GameActionCost.timeCost(GameActionType.SEARCH, currentDiff(session)));
                 discover(session);
+                MonkeyPooOutcome poo = maybeMonkeyPoo(session);
                 checkOutOfTime(session);
-                return new GameActionResult(true, prefix(session) + " You search the area.");
-            case PICK_UP:
-                return handlePickUp(session, action);
-            case DROP:
-                return handleDrop(session, action);
-            case RAFT_WORK_SMALL:
+                Challenge challenge = poo.triggered ? poo.challenge : null;
+                ChallengeResult challengeResult = poo.triggered ? poo.result : null;
+                outcome = new ActionOutcome(true, "You search the area.", challenge, challengeResult);
+            }
+            case PICK_UP -> outcome = handlePickUp(session, action);
+            case DROP -> outcome = handleDrop(session, action);
+            case RAFT_WORK_SMALL -> {
                 applyTime(session, GameActionCost.timeCost(GameActionType.RAFT_WORK_SMALL, currentDiff(session)));
                 checkOutOfTime(session);
-                return new GameActionResult(true, prefix(session) + " You tidy some rope and driftwood.");
-            case RAFT_WORK_MAJOR:
-                return handleRaftWork(session);
-            case LAUNCH_RAFT:
-                return handleLaunch(session);
-            default:
-                return new GameActionResult(false, prefix(session) + " Action not supported.");
+                outcome = new ActionOutcome(true, "You tidy some rope and driftwood.", null, null);
+            }
+            case RAFT_WORK_MAJOR -> outcome = handleRaftWork(session);
+            case LAUNCH_RAFT -> outcome = handleLaunch(session);
+            default -> outcome = new ActionOutcome(false, "Action not supported.", null, null);
         }
+
+        TurnContext ctx = TurnContextBuilder.build(session, action, outcome.resultSummary, outcome.success, outcome.challenge, outcome.challengeResult);
+        String body = dmAdapter.narrate(ctx);
+        String message = prefix(session) + " " + body;
+        return new GameActionResult(outcome.success, message, ctx);
     }
 
-    private static GameActionResult handleMove(GameSession session, GameAction action) {
+    private static ActionOutcome handleMove(GameSession session, GameAction action) {
         Direction8 dir = action.getDirection();
         if (dir == null) {
-            return new GameActionResult(false, prefix(session) + " No direction provided.");
+            return new ActionOutcome(false, "No direction provided.", null, null);
         }
         IslandTile current = session.getMap().get(session.getLocation().getTileId()).orElse(null);
         if (current == null) {
-            return new GameActionResult(false, prefix(session) + " You seem to be nowhere.");
+            return new ActionOutcome(false, "You seem to be nowhere.", null, null);
         }
         Position targetPos = current.getPosition().step(dir);
         IslandTile target = session.getMap().get(targetPos).orElse(null);
         if (target == null) {
-            return new GameActionResult(false, prefix(session) + " No path that way.");
+            return new ActionOutcome(false, "No path that way.", null, null);
         }
         WorldGeometry.Classification cls = WorldGeometry.classify(targetPos);
         if (cls == WorldGeometry.Classification.OFF_WORLD || cls == WorldGeometry.Classification.BOUNDARY) {
-            return new GameActionResult(false, prefix(session) + " The island ends that way.");
+            return new ActionOutcome(false, "The island ends that way.", null, null);
         }
         if (target.getSafety() == TileSafety.IMPOSSIBLE) {
-            return new GameActionResult(false, prefix(session) + " Impassable terrain.");
+            return new ActionOutcome(false, "Impassable terrain.", null, null);
         }
         if (target.getSafety() == TileSafety.DEAD) {
-            // treat as blocked for now
-            return new GameActionResult(false, prefix(session) + " That way looks deadly.");
+            return new ActionOutcome(false, "That way looks deadly.", null, null);
         }
         int timeCost = GameActionCost.timeCost(action.getType(), target.getDifficulty());
         session.setLocation(new com.demo.island.world.PlayerLocation(target.getTileId()));
         applyTime(session, timeCost);
+        MonkeyPooOutcome poo = maybeMonkeyPoo(session);
         checkOutOfTime(session);
         LOG.fine(() -> "Moved " + dir + " to " + target.getTileId() + " cost=" + timeCost + " totalPips=" + session.getClock().getTotalPips());
-        return new GameActionResult(true, prefix(session) + " You move " + dir + ".");
+        Challenge challenge = poo.triggered ? poo.challenge : null;
+        ChallengeResult challengeResult = poo.triggered ? poo.result : null;
+        return new ActionOutcome(true, "You move " + dir + ".", challenge, challengeResult);
     }
 
-    private static GameActionResult handlePickUp(GameSession session, GameAction action) {
+    private static ActionOutcome handlePickUp(GameSession session, GameAction action) {
         GameItemType item = action.getItemType();
         if (item == null) {
-            return new GameActionResult(false, prefix(session) + " Pick up what?");
+            return new ActionOutcome(false, "Pick up what?", null, null);
         }
         PlotResources res = session.getPlotResources().get(session.getLocation().getTileId());
         if (res == null || !res.isDiscovered()) {
-            return new GameActionResult(false, prefix(session) + " You haven't found any items here.");
+            return new ActionOutcome(false, "You haven't found any items here.", null, null);
         }
         if (!res.has(item)) {
-            return new GameActionResult(false, prefix(session) + " No such item here.");
+            return new ActionOutcome(false, "No such item here.", null, null);
         }
         res.take(item);
         session.getInventory().put(item, session.getInventory().getOrDefault(item, 0) + 1);
         applyTime(session, GameActionCost.timeCost(GameActionType.PICK_UP, currentDiff(session)));
         checkOutOfTime(session);
-        return new GameActionResult(true, prefix(session) + " Picked up " + item);
+        return new ActionOutcome(true, "Picked up " + item, null, null);
     }
 
-    private static GameActionResult handleDrop(GameSession session, GameAction action) {
+    private static ActionOutcome handleDrop(GameSession session, GameAction action) {
         GameItemType item = action.getItemType();
         if (item == null) {
-            return new GameActionResult(false, prefix(session) + " Drop what?");
+            return new ActionOutcome(false, "Drop what?", null, null);
         }
         int invCount = session.getInventory().getOrDefault(item, 0);
         if (invCount <= 0) {
-            return new GameActionResult(false, prefix(session) + " You don't have that.");
+            return new ActionOutcome(false, "You don't have that.", null, null);
         }
         session.getInventory().put(item, invCount - 1);
         PlotResources res = session.getPlotResources().computeIfAbsent(session.getLocation().getTileId(), k -> new PlotResources(true));
         res.drop(item);
         applyTime(session, GameActionCost.timeCost(GameActionType.DROP, currentDiff(session)));
         checkOutOfTime(session);
-        return new GameActionResult(true, prefix(session) + " Dropped " + item);
+        return new ActionOutcome(true, "Dropped " + item, null, null);
     }
 
-    private static GameActionResult handleRaftWork(GameSession session) {
+    private static ActionOutcome handleJump(GameSession session, GameAction action) {
+        Direction8 dir = action.getDirection();
+        if (dir == null) {
+            return new ActionOutcome(false, "You need to say which way to jump.", null, null);
+        }
         IslandTile current = session.getMap().get(session.getLocation().getTileId()).orElse(null);
         if (current == null) {
-            return new GameActionResult(false, prefix(session) + " Unknown location.");
+            return new ActionOutcome(false, "You seem to be nowhere.", null, null);
+        }
+        Position targetPos = current.getPosition().step(dir);
+        IslandTile target = session.getMap().get(targetPos).orElse(null);
+        if (target == null) {
+            return new ActionOutcome(false, "There's nowhere to land that way.", null, null);
+        }
+        WorldGeometry.Classification cls = WorldGeometry.classify(targetPos);
+        if (cls == WorldGeometry.Classification.OFF_WORLD || cls == WorldGeometry.Classification.BOUNDARY) {
+            return new ActionOutcome(false, "That's beyond the island's edge.", null, null);
+        }
+        if (target.getSafety() != TileSafety.NORMAL) {
+            return new ActionOutcome(false, "That way looks unsafe to jump.", null, null);
+        }
+
+        Thing playerThing = session.getThingIndex().getThing("THING_PLAYER");
+        boolean prof = false;
+        if (playerThing instanceof CharacterThing ct) {
+            prof = ct.getSkillProficiencies().contains(Skill.ACROBATICS);
+        }
+        Challenge challenge = new Challenge(
+                "JUMP_GENERIC",
+                ChallengeType.SKILL_CHECK,
+                Ability.DEX,
+                Skill.ACROBATICS,
+                12,
+                prof,
+                "Jumping across a gap or obstacle."
+        );
+        ChallengeResult result = challengeResolver.resolve((CharacterThing) playerThing, challenge);
+
+        int walkCost = GameActionCost.timeCost(GameActionType.MOVE_WALK, target.getDifficulty());
+        int timeCost;
+        String summary;
+        if (result.isSuccess()) {
+            session.setLocation(new com.demo.island.world.PlayerLocation(target.getTileId()));
+            timeCost = walkCost;
+            summary = "You gather yourself and clear the gap, landing on the far side.";
+        } else {
+            timeCost = walkCost + 2;
+            if (result.isNatural1()) {
+                timeCost += 2;
+            }
+            summary = "You push off, but come up short and scramble back to where you started.";
+        }
+        applyTime(session, timeCost);
+        MonkeyPooOutcome poo = maybeMonkeyPoo(session);
+        checkOutOfTime(session);
+        Challenge finalChallenge = poo.triggered ? poo.challenge : challenge;
+        ChallengeResult finalResult = poo.triggered ? poo.result : result;
+        return new ActionOutcome(result.isSuccess(), summary, finalChallenge, finalResult);
+    }
+
+    private static ActionOutcome handleRaftWork(GameSession session) {
+        IslandTile current = session.getMap().get(session.getLocation().getTileId()).orElse(null);
+        if (current == null) {
+            return new ActionOutcome(false, "Unknown location.", null, null);
         }
         String id = current.getTileId();
         if (!id.equals("T_CAMP") && !id.equals("T_WRECK_BEACH")) {
-            return new GameActionResult(false, prefix(session) + " You need a stable site to work on the raft.");
+            return new ActionOutcome(false, "You need a stable site to work on the raft.", null, null);
         }
         int progress = session.getRaftProgress();
         Map<GameItemType, Integer> need = requirementsFor(progress);
         if (need.isEmpty()) {
-            return new GameActionResult(false, prefix(session) + " Raft is already complete.");
+            return new ActionOutcome(false, "Raft is already complete.", null, null);
         }
         if (!hasInventory(session, need)) {
-            return new GameActionResult(false, prefix(session) + " You lack materials: " + need);
+            return new ActionOutcome(false, "You lack materials: " + need, null, null);
         }
         consumeInventory(session, need);
         session.incrementRaftProgress();
         applyTime(session, GameActionCost.timeCost(GameActionType.RAFT_WORK_MAJOR, currentDiff(session)));
         checkOutOfTime(session);
-        return new GameActionResult(true, prefix(session) + " Raft work advanced to step " + session.getRaftProgress());
+        return new ActionOutcome(true, "Raft work advanced to step " + session.getRaftProgress(), null, null);
     }
 
-    private static GameActionResult handleLaunch(GameSession session) {
+    private static ActionOutcome handleLaunch(GameSession session) {
         IslandTile current = session.getMap().get(session.getLocation().getTileId()).orElse(null);
         if (current == null) {
-            return new GameActionResult(false, prefix(session) + " Unknown location.");
+            return new ActionOutcome(false, "Unknown location.", null, null);
         }
         if (!current.getTileId().equals("T_WRECK_BEACH")) {
-            return new GameActionResult(false, prefix(session) + " You need to launch at the beach.");
+            return new ActionOutcome(false, "You need to launch at the beach.", null, null);
         }
         if (!session.isRaftReady()) {
-            return new GameActionResult(false, prefix(session) + " The raft is not ready.");
+            return new ActionOutcome(false, "The raft is not ready.", null, null);
         }
         if (session.getClock().isOutOfTime()) {
-            return new GameActionResult(false, prefix(session) + " Too late to launch.");
+            return new ActionOutcome(false, "Too late to launch.", null, null);
         }
         applyTime(session, 5);
         session.setStatus(GameStatus.WON);
         session.setGameEndReason(GameEndReason.RAFT_LAUNCHED);
-        return new GameActionResult(true, prefix(session) + " You push off and launch the raft!");
+        return new ActionOutcome(true, "You push off and launch the raft!", null, null);
+    }
+
+    private static MonkeyPooOutcome maybeMonkeyPoo(GameSession session) {
+        if (!isInMonkeyTerritory(session)) {
+            return MonkeyPooOutcome.notTriggered();
+        }
+        Thing playerThing = session.getThingIndex().getThing("THING_PLAYER");
+        if (!(playerThing instanceof CharacterThing ct)) {
+            return MonkeyPooOutcome.notTriggered();
+        }
+        boolean prof = ct.getSaveProficiencies().contains(Ability.DEX);
+        Challenge challenge = new Challenge(
+                "DODGE_MONKEY_POO",
+                ChallengeType.SAVING_THROW,
+                Ability.DEX,
+                null,
+                12,
+                prof,
+                "Dodging a volley of monkey-thrown poo."
+        );
+        ChallengeResult result = challengeResolver.resolve(ct, challenge);
+
+        if (result.isSuccess()) {
+            return new MonkeyPooOutcome(true, challenge, result);
+        }
+
+        int penalty = 2;
+        if (result.isNatural1()) {
+            penalty += 3;
+        }
+        applyTime(session, penalty);
+        return new MonkeyPooOutcome(true, challenge, result);
+    }
+
+    private static boolean isInMonkeyTerritory(GameSession session) {
+        WorldThingIndex index = session.getThingIndex();
+        String tileId = session.getLocation().getTileId();
+        IslandTile tile = session.getMap().get(tileId).orElse(null);
+        if (tile == null) {
+            return false;
+        }
+        for (String tid : tile.getThingsPresent()) {
+            Thing t = index.getThing(tid);
+            if (t != null && t.getTags().contains("MONKEY_TROOP")) {
+                return true;
+            }
+        }
+        for (String tid : tile.getThingsAnchoredHere()) {
+            Thing t = index.getThing(tid);
+            if (t != null && t.getTags().contains("MONKEY_TROOP")) {
+                return true;
+            }
+        }
+        return "T_VINE_FOREST".equals(tileId);
     }
 
     private static Map<GameItemType, Integer> requirementsFor(int progress) {
@@ -230,5 +367,24 @@ public final class GameEngine {
 
     private static String prefix(GameSession session) {
         return session.getClock().formatRemainingBracketed();
+    }
+
+    private record ActionOutcome(boolean success, String resultSummary, Challenge challenge, ChallengeResult challengeResult) {
+    }
+
+    private static final class MonkeyPooOutcome {
+        final boolean triggered;
+        final Challenge challenge;
+        final ChallengeResult result;
+
+        MonkeyPooOutcome(boolean triggered, Challenge challenge, ChallengeResult result) {
+            this.triggered = triggered;
+            this.challenge = challenge;
+            this.result = result;
+        }
+
+        static MonkeyPooOutcome notTriggered() {
+            return new MonkeyPooOutcome(false, null, null);
+        }
     }
 }

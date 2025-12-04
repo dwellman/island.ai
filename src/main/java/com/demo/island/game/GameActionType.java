@@ -3,6 +3,7 @@ package com.demo.island.game;
 public enum GameActionType {
     MOVE_WALK,
     MOVE_RUN,
+    JUMP,
     LOOK,
     SEARCH,
     PICK_UP,

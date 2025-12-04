@@ -4,7 +4,8 @@ import com.demo.island.world.IslandCreationResult;
 import com.demo.island.world.IslandMap;
 import com.demo.island.world.IslandWorldBuilder;
 import com.demo.island.world.PlayerLocation;
-import com.demo.island.game.CosmosClock;
+import com.demo.island.world.WorldThingIndex;
+import com.demo.island.world.WorldThingSeeder;
 
 import java.util.EnumMap;
 import java.util.Map;
@@ -19,6 +20,7 @@ public final class GameSession {
     private PlayerLocation location;
     private final Map<GameItemType, Integer> inventory = new EnumMap<>(GameItemType.class);
     private final Map<String, PlotResources> plotResources = new java.util.HashMap<>();
+    private final WorldThingIndex thingIndex;
     private int raftProgress;
     private GameStatus status;
     private GameEndReason gameEndReason;
@@ -27,6 +29,7 @@ public final class GameSession {
         this.map = creation.getMap();
         this.clock = new CosmosClock(CosmosClock.DEFAULT_MAX_PIPS);
         this.location = PlayerLocation.spawn();
+        this.thingIndex = WorldThingSeeder.seed(this.map);
         this.raftProgress = 0;
         this.status = GameStatus.IN_PROGRESS;
         this.gameEndReason = GameEndReason.NONE;
@@ -72,6 +75,10 @@ public final class GameSession {
 
     public Map<String, PlotResources> getPlotResources() {
         return plotResources;
+    }
+
+    public WorldThingIndex getThingIndex() {
+        return thingIndex;
     }
 
     public int getRaftProgress() {

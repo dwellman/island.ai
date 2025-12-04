@@ -19,6 +19,8 @@ public final class IslandTile {
     private final java.util.List<PlantFamily> secondaryPlantFamilies;
     private final PlantDensity plantDensity;
     private final TileContext context;
+    private final java.util.Set<String> thingsPresent;
+    private final java.util.Set<String> thingsAnchoredHere;
 
     public IslandTile(String tileId, TileKind kind, Position position, String biome, String region, String elevation,
                       TerrainDifficulty difficulty, TileSafety safety, boolean walkable,
@@ -41,6 +43,8 @@ public final class IslandTile {
         this.secondaryPlantFamilies = secondaryPlantFamilies == null ? java.util.List.of() : java.util.List.copyOf(secondaryPlantFamilies);
         this.plantDensity = plantDensity;
         this.context = context;
+        this.thingsPresent = new java.util.HashSet<>();
+        this.thingsAnchoredHere = new java.util.HashSet<>();
     }
 
     public String getTileId() {
@@ -97,5 +101,13 @@ public final class IslandTile {
 
     public TileContext getContext() {
         return context;
+    }
+
+    public java.util.Set<String> getThingsPresent() {
+        return thingsPresent;
+    }
+
+    public java.util.Set<String> getThingsAnchoredHere() {
+        return thingsAnchoredHere;
     }
 }
