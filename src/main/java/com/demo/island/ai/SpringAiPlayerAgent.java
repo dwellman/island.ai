@@ -4,16 +4,16 @@ import com.demo.island.player.PlayerAgent;
 import com.demo.island.player.PlayerInput;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.springframework.ai.chat.client.ChatClient;
-
-import java.util.logging.Logger;
 
 /**
  * Player agent backed by Spring AI. Returns a single command string.
  */
 public final class SpringAiPlayerAgent implements PlayerAgent {
 
-    private static final Logger LOG = Logger.getLogger(SpringAiPlayerAgent.class.getName());
+    private static final Logger LOG = LogManager.getLogger(SpringAiPlayerAgent.class);
 
     private final ChatClient chatClient;
     private final String systemPrompt;
@@ -36,7 +36,7 @@ public final class SpringAiPlayerAgent implements PlayerAgent {
         try {
             jsonInput = mapper.writeValueAsString(input.toDto());
         } catch (Exception e) {
-            LOG.warning("Failed to serialize Player input: " + e.getMessage());
+            LOG.warn("Failed to serialize Player input: {}", e.getMessage());
             return "LOOK";
         }
 
@@ -48,7 +48,7 @@ public final class SpringAiPlayerAgent implements PlayerAgent {
                     .call()
                     .content();
         } catch (Exception e) {
-            LOG.warning("Player agent call failed: " + e.getMessage());
+            LOG.warn("Player agent call failed: {}", e.getMessage());
             return "LOOK";
         }
 

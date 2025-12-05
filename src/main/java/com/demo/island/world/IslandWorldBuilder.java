@@ -8,14 +8,15 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.StringJoiner;
-import java.util.logging.Logger;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 /**
  * Orchestrates world build steps and logs each phase. Does not start the game clock.
  */
 public final class IslandWorldBuilder {
 
-    private static final Logger LOG = Logger.getLogger(IslandWorldBuilder.class.getName());
+    private static final Logger LOG = LogManager.getLogger(IslandWorldBuilder.class);
 
     private IslandWorldBuilder() {
     }
@@ -57,7 +58,7 @@ public final class IslandWorldBuilder {
     }
 
     private static void logStepHeader(int number, String name) {
-        LOG.info(() -> "WORLD BUILD STEP " + number + ": " + name);
+        LOG.info("WORLD BUILD STEP {}: {}", number, name);
     }
 
     private static void logGeometry() {
@@ -66,7 +67,7 @@ public final class IslandWorldBuilder {
         String band = "islandBand x=[" + WorldGeometry.ISLAND_MIN_X + "," + WorldGeometry.ISLAND_MAX_X + "] "
                 + "y=[" + WorldGeometry.ISLAND_MIN_Y + "," + WorldGeometry.ISLAND_MAX_Y + "]";
         String spawn = "spawn=" + WorldGeometry.SPAWN;
-        LOG.fine(() -> envelope + "; " + band + "; " + spawn);
+        LOG.debug("{}; {}; {}", envelope, band, spawn);
     }
 
     private static void logAnchors() {
@@ -74,7 +75,7 @@ public final class IslandWorldBuilder {
         for (AnchorTile tile : AnchorTiles.all()) {
             joiner.add(tile.getTileId() + "@" + tile.getPosition().x() + ":" + tile.getPosition().y());
         }
-        LOG.fine(() -> "anchors count=" + AnchorTiles.all().size() + " [" + joiner + "]");
+        LOG.debug("anchors count={} [{}]", AnchorTiles.all().size(), joiner);
     }
 
     private static void logAnchorTopology() {
@@ -88,7 +89,7 @@ public final class IslandWorldBuilder {
         }
         final int linkCount = links;
         final boolean reachable = allAnchorsReachable();
-        LOG.fine(() -> "anchor neighbor links=" + linkCount + "; all reachable from spawn=" + reachable);
+        LOG.debug("anchor neighbor links={}; all reachable from spawn={}", linkCount, reachable);
     }
 
     private static boolean allAnchorsReachable() {
@@ -127,12 +128,8 @@ public final class IslandWorldBuilder {
         final int gardenedFinal = gardened;
         final int boundaryFinal = boundary;
         final boolean walkableConnected = connected;
-        LOG.fine(() -> "plots total=" + total
-                + " eligibleCoords=" + eligible
-                + " anchors=" + anchorsFinal
-                + " gardened=" + gardenedFinal
-                + " boundary=" + boundaryFinal
-                + "; walkable connected=" + walkableConnected);
+        LOG.debug("plots total={} eligibleCoords={} anchors={} gardened={} boundary={}; walkable connected={}",
+                total, eligible, anchorsFinal, gardenedFinal, boundaryFinal, walkableConnected);
     }
 
     private static boolean isFullyConnected(IslandMap map) {
@@ -165,7 +162,7 @@ public final class IslandWorldBuilder {
                 .filter(t -> t.getContext() != null && !t.getContext().getBaseDescription().isEmpty())
                 .count();
         final int total = map.allTiles().size();
-        LOG.fine(() -> "plots with base/current descriptions=" + withBase + "/" + total);
+        LOG.debug("plots with base/current descriptions={}/{}", withBase, total);
     }
 
     private static void logDifficultySafety(IslandMap map) {
@@ -179,7 +176,7 @@ public final class IslandWorldBuilder {
         });
         final Map<TerrainDifficulty, Integer> diffSnapshot = new EnumMap<>(diffCounts);
         final Map<TileSafety, Integer> safetySnapshot = new EnumMap<>(safetyCounts);
-        LOG.fine(() -> "difficulty=" + diffSnapshot + "; safety=" + safetySnapshot);
+        LOG.debug("difficulty={}; safety={}", diffSnapshot, safetySnapshot);
     }
 
     private static void logFeaturesSmoothing(IslandMap map) {
@@ -187,8 +184,8 @@ public final class IslandWorldBuilder {
         final long cliffFaceCount = map.allTiles().stream().filter(t -> t.getFeatures().contains(TerrainFeature.CLIFF_FACE)).count();
         final long waterfallCount = map.allTiles().stream().filter(t -> t.getFeatures().contains(TerrainFeature.WATERFALL_DROP)).count();
         final boolean smoothingOk = smoothingConstraintHolds(map);
-        LOG.fine(() -> "features PATH=" + pathCount + " CLIFF_FACE=" + cliffFaceCount + " WATERFALL_DROP=" + waterfallCount
-                + "; smoothingConstraintOk=" + smoothingOk);
+        LOG.debug("features PATH={} CLIFF_FACE={} WATERFALL_DROP={} ; smoothingConstraintOk={}",
+                pathCount, cliffFaceCount, waterfallCount, smoothingOk);
     }
 
     private static boolean smoothingConstraintHolds(IslandMap map) {
@@ -230,17 +227,18 @@ public final class IslandWorldBuilder {
             primary.put(t.getPrimaryPlantFamily(), primary.get(t.getPrimaryPlantFamily()) + 1);
             density.put(t.getPlantDensity(), density.get(t.getPlantDensity()) + 1);
         });
-        LOG.fine(() -> "flora primary=" + primary + "; density=" + density);
+        LOG.debug("flora primary={}; density={}", primary, density);
     }
 
     private static void logSanityReport(GardenerWorldReport report) {
-        LOG.fine(() -> "sanity plotsVisited=" + report.getPlotsVisited()
-                + " anchorPlotsVisited=" + report.getAnchorPlotsVisited()
-                + " difficultyOutliersFixed=" + report.getDifficultyOutliersFixed()
-                + " deadPlotsRelaxed=" + report.getDeadPlotsRelaxed()
-                + " impossiblePlotsRelaxed=" + report.getImpossiblePlotsRelaxed()
-                + " pathPlotsSmoothed=" + report.getPathPlotsSmoothed()
-                + " warnings=" + report.getWarnings());
+        LOG.debug("sanity plotsVisited={} anchorPlotsVisited={} difficultyOutliersFixed={} deadPlotsRelaxed={} impossiblePlotsRelaxed={} pathPlotsSmoothed={} warnings={}",
+                report.getPlotsVisited(),
+                report.getAnchorPlotsVisited(),
+                report.getDifficultyOutliersFixed(),
+                report.getDeadPlotsRelaxed(),
+                report.getImpossiblePlotsRelaxed(),
+                report.getPathPlotsSmoothed(),
+                report.getWarnings());
     }
 
     private static IslandCreationReport buildReport(IslandMap map, GardenerWorldReport gardenerReport) {
@@ -580,33 +578,38 @@ public final class IslandWorldBuilder {
 
     private static void logReportSummary(IslandCreationReport r) {
         // One INFO verdict line
-        LOG.info(() -> "[REPORT] verdict readyForCosmos=" + r.verdict.readyForCosmos
-                + " fullCoverage=" + r.gardener.hasFullGardenerCoverage
-                + (r.verdict.blockingIssues.isEmpty() ? "" : " blocking=" + r.verdict.blockingIssues)
-                + (r.verdict.nonBlockingWarnings.isEmpty() ? "" : " warnings=" + r.verdict.nonBlockingWarnings));
+        LOG.info("[REPORT] verdict readyForCosmos={} fullCoverage={}{}{}",
+                r.verdict.readyForCosmos,
+                r.gardener.hasFullGardenerCoverage,
+                (r.verdict.blockingIssues.isEmpty() ? "" : " blocking=" + r.verdict.blockingIssues),
+                (r.verdict.nonBlockingWarnings.isEmpty() ? "" : " warnings=" + r.verdict.nonBlockingWarnings));
 
         // Detailed report at DEBUG/ FINE
-        LOG.fine(() -> "[REPORT] meta id=" + r.meta.worldId + " build=" + r.meta.buildVersion + " seed=" + r.meta.gardenerSeed);
-        LOG.fine(() -> "[REPORT] geometry islandEligible=" + r.geometry.islandEligiblePlotCount
-                + " anchors=" + r.anchorPlotCount);
-        LOG.fine(() -> "[REPORT] connectivity primesReachable=" + r.connectivity.allPrimePlotsReachableFromSpawn
-                + " unreachablePrimes=" + r.connectivity.unreachablePrimePlots
-                + " reachableWalkable=" + r.connectivity.walkablePlotsReachableFromSpawn
-                + "/" + r.connectivity.totalWalkablePlots);
-        LOG.fine(() -> "[REPORT] hazards dead=" + r.hazards.deadPlotCount + " impossible=" + r.hazards.impossiblePlotCount);
-        LOG.fine(() -> "[REPORT] difficulty counts=" + r.difficulty.difficultyCounts
-                + " violations=" + r.difficulty.neighborDifficultyViolations
-                + " maxNeighborDelta=" + r.difficulty.maxNeighborDifficultyDifference);
-        LOG.fine(() -> "[REPORT] features PATH=" + r.features.featureCounts.getOrDefault(TerrainFeature.PATH, 0)
-                + " mainPathContinuous=" + r.features.mainPathContinuous
-                + " mainPathScore=" + r.features.mainPathTotalDifficultyScore);
-        LOG.fine(() -> "[REPORT] flora families=" + r.flora.plantFamilyCounts);
-        LOG.fine(() -> "[REPORT] gardener visited=" + r.gardener.plotsVisitedByGardener
-                + " fixes(diff/ dead/ imp)=" + r.gardener.difficultyOutliersFixedByGardener + "/"
-                + r.gardener.deadPlotsRelaxedByGardener + "/"
-                + r.gardener.impossiblePlotsRelaxedByGardener
-                + " walkableCoverage=" + r.gardener.walkablePlotsVisitedByGardener + "/" + r.walkablePlotCount
-                + " fullCoverage=" + r.gardener.hasFullGardenerCoverage
-                + " unvisited=" + r.gardener.unvisitedWalkablePlots);
+        LOG.debug("[REPORT] meta id={} build={} seed={}", r.meta.worldId, r.meta.buildVersion, r.meta.gardenerSeed);
+        LOG.debug("[REPORT] geometry islandEligible={} anchors={}", r.geometry.islandEligiblePlotCount, r.anchorPlotCount);
+        LOG.debug("[REPORT] connectivity primesReachable={} unreachablePrimes={} reachableWalkable={}/{}",
+                r.connectivity.allPrimePlotsReachableFromSpawn,
+                r.connectivity.unreachablePrimePlots,
+                r.connectivity.walkablePlotsReachableFromSpawn,
+                r.connectivity.totalWalkablePlots);
+        LOG.debug("[REPORT] hazards dead={} impossible={}", r.hazards.deadPlotCount, r.hazards.impossiblePlotCount);
+        LOG.debug("[REPORT] difficulty counts={} violations={} maxNeighborDelta={}",
+                r.difficulty.difficultyCounts,
+                r.difficulty.neighborDifficultyViolations,
+                r.difficulty.maxNeighborDifficultyDifference);
+        LOG.debug("[REPORT] features PATH={} mainPathContinuous={} mainPathScore={}",
+                r.features.featureCounts.getOrDefault(TerrainFeature.PATH, 0),
+                r.features.mainPathContinuous,
+                r.features.mainPathTotalDifficultyScore);
+        LOG.debug("[REPORT] flora families={}", r.flora.plantFamilyCounts);
+        LOG.debug("[REPORT] gardener visited={} fixes(diff/ dead/ imp)={}/{}/{} walkableCoverage={}/{} fullCoverage={} unvisited={}",
+                r.gardener.plotsVisitedByGardener,
+                r.gardener.difficultyOutliersFixedByGardener,
+                r.gardener.deadPlotsRelaxedByGardener,
+                r.gardener.impossiblePlotsRelaxedByGardener,
+                r.gardener.walkablePlotsVisitedByGardener,
+                r.walkablePlotCount,
+                r.gardener.hasFullGardenerCoverage,
+                r.gardener.unvisitedWalkablePlots);
     }
 }

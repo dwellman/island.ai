@@ -1,12 +1,12 @@
 package com.demo.island.game;
 
 import com.demo.island.world.CharacterThing;
-
-import java.util.logging.Logger;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 public final class ChallengeResolver {
 
-    private static final Logger LOG = Logger.getLogger(ChallengeResolver.class.getName());
+    private static final Logger LOG = LogManager.getLogger(ChallengeResolver.class);
 
     private final DiceService diceService;
 
@@ -42,16 +42,17 @@ public final class ChallengeResolver {
         final int modSnapshot = abilityMod;
         final int profSnapshot = profApplied;
         final int totalSnapshot = total;
-        LOG.fine(() -> "[ROLL] id=" + challenge.getChallengeId()
-                + " type=" + challenge.getChallengeType()
-                + " ability=" + challenge.getAbility()
-                + " skill=" + challenge.getSkill()
-                + " roll=" + rollSnapshot
-                + " mod=" + modSnapshot
-                + " prof=" + profSnapshot
-                + " total=" + totalSnapshot
-                + " vs dc=" + challenge.getDc()
-                + " => " + degree);
+        LOG.debug("[ROLL] id={} type={} ability={} skill={} roll={} mod={} prof={} total={} vs dc={} => {}",
+                challenge.getChallengeId(),
+                challenge.getChallengeType(),
+                challenge.getAbility(),
+                challenge.getSkill(),
+                rollSnapshot,
+                modSnapshot,
+                profSnapshot,
+                totalSnapshot,
+                challenge.getDc(),
+                degree);
 
         return new ChallengeResult(
                 challenge.getChallengeId(),

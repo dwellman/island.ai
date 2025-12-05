@@ -9,17 +9,18 @@ import com.demo.island.core.TextFace;
 import com.demo.island.core.Tile;
 import com.demo.island.core.WorldState;
 import com.demo.island.engine.actions.StandardHooks;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import java.util.List;
 import java.util.UUID;
-import java.util.logging.Logger;
 
 /**
  * Builds a canonical static island layout.
  */
 public final class WorldBuilder {
 
-    private static final Logger LOG = Logger.getLogger(WorldBuilder.class.getName());
+    private static final Logger LOG = LogManager.getLogger(WorldBuilder.class);
 
     private WorldBuilder() {
     }
@@ -34,7 +35,7 @@ public final class WorldBuilder {
         buildCreatures(world);
         buildPlayer(world);
 
-        LOG.info(() -> "WORLD: start=T_CAMP neighbors={N=T_BAMBOO, E=T_VINES}");
+        LOG.info("WORLD: start=T_CAMP neighbors={N=T_BAMBOO, E=T_VINES}");
         return world;
     }
 

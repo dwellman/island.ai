@@ -18,6 +18,28 @@ public final class TurnContextBuilder {
                                     boolean lastSuccess,
                                     Challenge lastChallenge,
                                     ChallengeResult lastChallengeResult) {
+        return build(session, lastAction, lastResultSummary, lastSuccess, lastChallenge, lastChallengeResult, null, session.getLocation().getTileId(), ContextBuilder.buildPlotContext(session));
+    }
+
+    public static TurnContext build(GameSession session,
+                                    GameAction lastAction,
+                                    String lastResultSummary,
+                                    boolean lastSuccess,
+                                    Challenge lastChallenge,
+                                    ChallengeResult lastChallengeResult,
+                                    GhostPresenceEvent ghostEvent) {
+        return build(session, lastAction, lastResultSummary, lastSuccess, lastChallenge, lastChallengeResult, ghostEvent, session.getLocation().getTileId(), ContextBuilder.buildPlotContext(session));
+    }
+
+    public static TurnContext build(GameSession session,
+                                    GameAction lastAction,
+                                    String lastResultSummary,
+                                    boolean lastSuccess,
+                                    Challenge lastChallenge,
+                                    ChallengeResult lastChallengeResult,
+                                    GhostPresenceEvent ghostEvent,
+                                    String plotIdOverride,
+                                    com.demo.island.dto.PlotContext plotContextOverride) {
         TurnContext ctx = new TurnContext();
         CosmosClock clock = session.getClock();
         ctx.timePrefix = clock.formatRemainingBracketed();
@@ -33,9 +55,8 @@ public final class TurnContextBuilder {
         ctx.playerStatsSummary = playerStatsSummary(player);
         ctx.playerInventorySummary = inventorySummary(session);
 
-        ctx.currentPlotId = session.getLocation().getTileId();
-        PlotContext plotCtx = ContextBuilder.buildPlotContext(session);
-        ctx.plotContext = plotCtx;
+        ctx.currentPlotId = plotIdOverride;
+        ctx.plotContext = plotContextOverride;
 
         ctx.lastActionType = lastAction.getType();
         ctx.lastActionRawCommand = null; // raw text not tracked yet
@@ -44,7 +65,20 @@ public final class TurnContextBuilder {
         ctx.lastChallenge = lastChallenge;
         ctx.lastChallengeResult = lastChallengeResult;
 
+        applyGhostEvent(ctx, ghostEvent);
         return ctx;
+    }
+
+    private static void applyGhostEvent(TurnContext ctx, GhostPresenceEvent ghostEvent) {
+        if (ghostEvent == null) {
+            return;
+        }
+        ctx.ghostEventTriggered = true;
+        ctx.ghostEventPlotId = ghostEvent.plotId();
+        ctx.ghostEventText = ghostEvent.eventText();
+        ctx.ghostEventReason = ghostEvent.reason();
+        ctx.ghostMode = ghostEvent.mode() == null ? null : ghostEvent.mode().name();
+        ctx.ghostText = ghostEvent.manifestationText();
     }
 
     private static String playerStatsSummary(Thing player) {

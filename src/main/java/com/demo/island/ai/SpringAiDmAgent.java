@@ -5,13 +5,13 @@ import com.demo.island.engine.DmAgent;
 import com.demo.island.engine.DmDecision;
 import com.demo.island.engine.DmInput;
 import com.demo.island.engine.check.CheckService;
+import com.demo.island.tools.DmTools;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.springframework.ai.chat.client.ChatClient;
-import com.demo.island.tools.DmTools;
-
-import java.util.logging.Logger;
 
 /**
  * DM agent backed by Spring AI ChatClient. Loads system/dm prompts from classpath and
@@ -19,7 +19,7 @@ import java.util.logging.Logger;
  */
 public final class SpringAiDmAgent implements DmAgent {
 
-    private static final Logger LOG = Logger.getLogger(SpringAiDmAgent.class.getName());
+    private static final Logger LOG = LogManager.getLogger(SpringAiDmAgent.class);
 
     private final ChatClient chatClient;
     private final CheckService checkService;
@@ -51,7 +51,7 @@ public final class SpringAiDmAgent implements DmAgent {
         try {
             jsonInput = mapper.writeValueAsString(input.toDto());
         } catch (JsonProcessingException e) {
-            LOG.warning("Failed to serialize DM input: " + e.getMessage());
+            LOG.warn("Failed to serialize DM input: {}", e.getMessage());
             DmDecision fallback = new DmDecision("The DM falters, unable to parse the world.", false);
             fallback.addError("Serialization error: " + e.getMessage());
             return fallback;
@@ -65,7 +65,7 @@ public final class SpringAiDmAgent implements DmAgent {
                     .call()
                     .content();
         } catch (Exception e) {
-            LOG.warning("DM agent call failed: " + e.getMessage());
+            LOG.warn("DM agent call failed: {}", e.getMessage());
             DmDecision fallback = new DmDecision("The DM is silent for a moment.", false);
             fallback.addError("DM agent call failed: " + e.getMessage());
             return fallback;
@@ -76,7 +76,7 @@ public final class SpringAiDmAgent implements DmAgent {
             DmDecision decision = dto.toDecision(input.getWorldState(), input.getCommand().getPlayerId(), checkService);
             return enforceTurnConsumptionDefault(decision, input.getCommand().getRawText());
         } catch (Exception e) {
-            LOG.warning("Failed to parse DM response: " + e.getMessage());
+            LOG.warn("Failed to parse DM response: {}", e.getMessage());
             DmDecision fallback = new DmDecision("The DM mutters uncertainly.", false);
             fallback.addError("DM response parse failed: " + e.getMessage());
             return fallback;

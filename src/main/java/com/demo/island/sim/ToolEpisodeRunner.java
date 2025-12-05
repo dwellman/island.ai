@@ -32,6 +32,7 @@ public final class ToolEpisodeRunner {
 
         PlayerToolResult lastResult = new PlayerToolResult(session.getClock().formatRemainingBracketed()
                 + " You are standing in the dark just before dawn. You have no idea how you got here.",
+                null,
                 null);
 
         int turnsUsed = 0;

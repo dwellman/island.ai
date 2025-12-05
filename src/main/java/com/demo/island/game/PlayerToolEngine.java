@@ -2,13 +2,14 @@ package com.demo.island.game;
 
 import com.demo.island.dto.PlotContext;
 import com.demo.island.dto.ThingContext;
-import com.demo.island.world.Direction8;
+import com.demo.island.game.memory.PlayerMemoryRecorder;
 import com.demo.island.world.IslandTile;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.StringJoiner;
 import java.util.stream.Collectors;
 
@@ -17,57 +18,46 @@ import java.util.stream.Collectors;
  */
 public final class PlayerToolEngine {
 
+    private static final Logger LOG = LogManager.getLogger(PlayerToolEngine.class);
     private final GameSession session;
     private TurnContext lastTurn;
+    private final ToolActionExecutor executor = new ToolActionExecutor();
+    private int turnCounter = 0;
 
     public PlayerToolEngine(GameSession session) {
         this.session = session;
     }
 
     public PlayerToolResult invoke(PlayerToolRequest request) {
-        PlayerTool tool = request.getTool();
-        switch (tool) {
-            case STATUS -> {
-                PlayerToolState state = buildState(tool, "info");
-                String text = session.getClock().formatRemainingBracketed() + " You check your watch and gear.";
-                return new PlayerToolResult(text, state);
-            }
-            case LOOK, MOVE, SEARCH, TAKE, DROP, RAFT_WORK -> {
-                Optional<GameAction> actionOpt = mapToAction(request);
-                if (actionOpt.isEmpty()) {
-                    PlayerToolState state = buildState(tool, "blocked");
-                    String text = session.getClock().formatRemainingBracketed() + " That tool needs more info.";
-                    return new PlayerToolResult(text, state);
-                }
-                GameActionResult result = GameEngine.perform(session, actionOpt.get());
-                lastTurn = result.getTurnContext();
-                String status = result.isSuccess() ? "success" : "blocked";
-                PlayerToolState state = buildState(tool, status);
-                return new PlayerToolResult(result.getMessage(), state);
-            }
-            default -> {
-                PlayerToolState state = buildState(tool, "blocked");
-                String text = session.getClock().formatRemainingBracketed() + " Unsupported tool.";
-                return new PlayerToolResult(text, state);
-            }
-        }
+        turnCounter += 1;
+        PlotContext plotContext = ContextBuilder.buildPlotContext(session);
+        String targetRaw = rawTarget(request);
+        ToolContext ctx = ToolActionExecutor.buildContext(session, plotContext, request, targetRaw, "", "", "");
+        ToolOutcome outcome = executor.execute(ctx);
+
+        lastTurn = outcome.getTurnContext() != null ? outcome.getTurnContext() : lastTurn;
+        PlotContext memoryContext = lastTurn != null ? lastTurn.plotContext : plotContext;
+        PlayerMemoryRecorder.recordVisit(session, memoryContext, session.getClock().formatRemainingBracketed());
+        String status = switch (outcome.getOutcomeType()) {
+            case SUCCESS -> "success";
+            case FAIL -> "fail";
+            case BLOCKED -> "blocked";
+        };
+        PlayerToolState state = buildState(request.getTool(), status);
+
+        TurnContext dmContext = lastTurn != null ? lastTurn : TurnContextBuilder.build(session, GameAction.simple(GameActionType.LOOK), "", true, null, null);
+        String coreBody = DmMessageMapper.bodyFor(outcome);
+        String chosenBody = maybeRewriteDm(dmContext, outcome, request, targetRaw, coreBody);
+        String text = DmMessageMapper.messageForBody(chosenBody, session.getClock().formatRemainingBracketed());
+        TurnContext resultTurn = lastTurn != null ? lastTurn : dmContext;
+        return new PlayerToolResult(text, state, resultTurn);
     }
 
-    private Optional<GameAction> mapToAction(PlayerToolRequest req) {
+    private String rawTarget(PlayerToolRequest req) {
         return switch (req.getTool()) {
-            case LOOK -> Optional.of(GameAction.simple(GameActionType.LOOK));
-            case MOVE -> req.getDirection() != null
-                    ? Optional.of(GameAction.move(GameActionType.MOVE_WALK, req.getDirection()))
-                    : Optional.empty();
-            case SEARCH -> Optional.of(GameAction.simple(GameActionType.SEARCH));
-            case TAKE -> req.getItemType() != null
-                    ? Optional.of(GameAction.withItem(GameActionType.PICK_UP, req.getItemType()))
-                    : Optional.empty();
-            case DROP -> req.getItemType() != null
-                    ? Optional.of(GameAction.withItem(GameActionType.DROP, req.getItemType()))
-                    : Optional.empty();
-            case RAFT_WORK -> Optional.of(GameAction.simple(GameActionType.RAFT_WORK_MAJOR));
-            case STATUS -> Optional.empty();
+            case MOVE -> req.getDirection() != null ? req.getDirection().name() : "";
+            case TAKE, DROP -> req.getItemType() != null ? req.getItemType().name() : "";
+            default -> "";
         };
     }
 
@@ -119,20 +109,118 @@ public final class PlayerToolEngine {
     }
 
     private List<String> inventoryList() {
-        StringJoiner joiner = new StringJoiner(", ");
-        session.getInventory().forEach((item, count) -> {
-            if (count > 0) {
-                if (count == 1) {
-                    joiner.add(item.name());
-                } else {
-                    joiner.add(item.name() + " x" + count);
+        java.util.Set<String> names = new java.util.LinkedHashSet<>();
+        java.util.Set<GameItemType> itemTypesPresent = new java.util.HashSet<>();
+        session.getThingIndex().getAll().values().forEach(t -> {
+            if (t instanceof com.demo.island.world.ItemThing it) {
+                if ("THING_PLAYER".equals(it.getCarriedByCharacterId())) {
+                    names.add(it.getName() == null ? it.getItemType().name() : it.getName());
+                    itemTypesPresent.add(it.getItemType());
                 }
             }
         });
-        String inv = joiner.toString();
-        if (inv.isEmpty()) {
-            return List.of();
+        if (!names.isEmpty()) {
+            return new java.util.ArrayList<>(names);
         }
-        return List.of(inv.split(", "));
+        session.getInventory().forEach((item, count) -> {
+            if (count > 0) {
+                if (itemTypesPresent.contains(item)) {
+                    return; // already represented by a carried Thing name
+                }
+                String base = item.name().toLowerCase(java.util.Locale.ROOT).replace('_', ' ');
+                if (!names.contains(base) && !names.contains(item.name())) {
+                    names.add(count == 1 ? base : base + " x" + count);
+                }
+            }
+        });
+        return names.isEmpty() ? List.of() : new java.util.ArrayList<>(names);
+    }
+
+    private String maybeRewriteDm(TurnContext ctx,
+                                  ToolOutcome outcome,
+                                  PlayerToolRequest request,
+                                  String targetRaw,
+                                  String coreBody) {
+        if (!DmAgentConfig.isEnabled()) {
+            return coreBody;
+        }
+        DmAgent agent = DmAgentRegistry.getAgent();
+        if (agent == null) {
+            return coreBody;
+        }
+        try {
+            DmAgentContext context = buildDmAgentContext(ctx, outcome, request, targetRaw, coreBody);
+            String override = agent.rewrite(context);
+            if (override != null && !override.isBlank()) {
+                LOG.info("DmAgent: override used (tool={}, reasonCode={}).",
+                        context.actionOutcome().toolName(), context.actionOutcome().reasonCode());
+                return override.trim();
+            }
+            return coreBody;
+        } catch (Exception ex) {
+            return coreBody;
+        }
+    }
+
+    private DmAgentContext buildDmAgentContext(TurnContext ctx,
+                                               ToolOutcome outcome,
+                                               PlayerToolRequest request,
+                                               String targetRaw,
+                                               String coreBody) {
+        DmAgentPlayerView playerView = new DmAgentPlayerView("Player 1", inventoryList(), null, null, List.of());
+        PlotContext plotContext = ctx.plotContext;
+        Map<String, String> exits = plotContext != null && plotContext.neighborSummaries != null
+                ? plotContext.neighborSummaries.entrySet().stream()
+                .collect(Collectors.toMap(e -> e.getKey().name(), Map.Entry::getValue))
+                : Map.of();
+        List<String> visibleItems = plotContext != null && plotContext.visibleThings != null
+                ? plotContext.visibleThings.stream()
+                .filter(t -> t.getKind() == com.demo.island.world.ThingKind.ITEM)
+                .map(ThingContext::getName)
+                .toList()
+                : List.of();
+        String plotId = plotContext != null ? plotContext.plotId : null;
+        String plotName = plotId;
+        String biome = plotContext != null ? plotContext.biome : null;
+        String region = plotContext != null ? plotContext.region : null;
+        String description = plotContext != null ? plotContext.currentDescription : null;
+        DmAgentPlotView plotView = new DmAgentPlotView(plotId, plotName, biome, region, description, exits, visibleItems);
+
+        String toolName = request.getTool().name();
+        DmAgentActionOutcome actionOutcome = new DmAgentActionOutcome(
+                toolName,
+                targetRaw == null ? "" : targetRaw,
+                outcome.getOutcomeType(),
+                outcome.getReasonCode(),
+                coreBody,
+                summarizeChallenge(outcome.getChallenge(), outcome.getChallengeResult()));
+
+        String phase = ctx.phase != null ? ctx.phase.name() : "";
+        return new DmAgentContext(turnCounter, ctx.timePrefix, phase, playerView, plotView, actionOutcome, ghostView(ctx));
+    }
+
+    private DmAgentGhostView ghostView(TurnContext ctx) {
+        if (ctx == null || !ctx.ghostEventTriggered) {
+            return new DmAgentGhostView(false, null, null, null, null, null);
+        }
+        return new DmAgentGhostView(true, ctx.ghostEventPlotId, ctx.ghostEventText, ctx.ghostEventReason, ctx.ghostMode, ctx.ghostText);
+    }
+
+    private String summarizeChallenge(Challenge challenge, ChallengeResult result) {
+        if (challenge == null || result == null) {
+            return "";
+        }
+        StringBuilder sb = new StringBuilder();
+        sb.append(challenge.getChallengeId()).append(" result=").append(result.isSuccess() ? "success" : "fail");
+        sb.append(" roll=").append(result.getTotal());
+        return sb.toString();
+    }
+
+    public static void setDmAgentForTests(DmAgent agent) {
+        DmAgentRegistry.setAgent(agent);
+    }
+
+    public static void resetDmAgentForTests() {
+        DmAgentRegistry.reset();
     }
 }

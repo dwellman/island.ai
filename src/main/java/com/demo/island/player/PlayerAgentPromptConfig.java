@@ -1,36 +1,31 @@
 package com.demo.island.player;
 
+import com.demo.island.config.PromptLoader;
 import com.demo.island.game.PlayerTool;
-import org.springframework.beans.factory.annotation.Value;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.EnumMap;
 import java.util.Map;
 
 @Configuration
 public class PlayerAgentPromptConfig {
 
+    private static final Logger LOG = LogManager.getLogger(PlayerAgentPromptConfig.class);
+    private static final String DEFAULT_PATH = "prompts/Player1.md";
+    private static final String FALLBACK_PROMPT = """
+            You are an external player for a small text-based survival game. Choose exactly one tool each turn (LOOK, MOVE, SEARCH, TAKE, DROP, RAFT_WORK, STATUS) and provide short reasoning. Keep responses concise and avoid free-form narration.
+            """;
+
     @Bean
-    public String playerAgentSystemPrompt(@Value("${unna.player.llm.lab:false}") boolean labMode) {
-        if (labMode) {
-            try {
-                return Files.readString(Path.of("prompts/Player1.md"));
-            } catch (IOException ex) {
-                // fall through to default prompt if lab prompt cannot be loaded
-            }
+    public String playerAgentSystemPrompt() {
+        String overridePath = System.getProperty("player1.prompt.path");
+        if (overridePath == null || overridePath.isBlank()) {
+            overridePath = System.getenv("PLAYER1_PROMPT_PATH");
         }
-        return """
-                You are a smart external player controlling a single character in a text-based survival game set on a small island.
-                The game engine is simple, “1980s-style” logic. It tracks locations, a countdown timer ([HH:MM]), items/resources, construction progress, and simple hazards.
-                You are not in the story and not the DM. You are a 2025 player pressing buttons.
-                Each turn you see the latest game message (with time) and a summarized state (time/phase, location, exits, visible items, inventory, progress, last tool/result).
-                You must pick exactly one tool to use next and give a one-sentence reason. Do not narrate outcomes; just pick a tool and explain why.
-                You have a limited number of turns per episode; avoid wasting time on actions that stop yielding new info or progress.
-                """;
+        return PromptLoader.loadOrFallback(DEFAULT_PATH, overridePath, FALLBACK_PROMPT, LOG, "Player1");
     }
 
     @Bean

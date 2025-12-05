@@ -15,7 +15,10 @@ public final class IslandMap {
     private final Map<String, IslandTile> byId = new HashMap<>();
 
     public void put(IslandTile tile) {
-        byPosition.put(tile.getPosition(), tile);
+        IslandTile previous = byPosition.put(tile.getPosition(), tile);
+        if (previous != null && !previous.getTileId().equals(tile.getTileId())) {
+            byId.remove(previous.getTileId());
+        }
         byId.put(tile.getTileId(), tile);
     }
 

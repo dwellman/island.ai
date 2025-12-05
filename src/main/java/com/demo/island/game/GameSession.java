@@ -6,9 +6,13 @@ import com.demo.island.world.IslandWorldBuilder;
 import com.demo.island.world.PlayerLocation;
 import com.demo.island.world.WorldThingIndex;
 import com.demo.island.world.WorldThingSeeder;
+import com.demo.island.game.memory.PlayerMemory;
 
+import java.util.Collections;
 import java.util.EnumMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Game-layer session holding player state, clock, and world reference.
@@ -21,6 +25,11 @@ public final class GameSession {
     private final Map<GameItemType, Integer> inventory = new EnumMap<>(GameItemType.class);
     private final Map<String, PlotResources> plotResources = new java.util.HashMap<>();
     private final WorldThingIndex thingIndex;
+    private final Set<String> ghostAnchorsTriggered = new HashSet<>();
+    private final Map<String, Integer> ghostManifestCounts = new java.util.HashMap<>();
+    private String lastGhostMode = "";
+    private String lastGhostText = "";
+    private final PlayerMemory playerMemory = new PlayerMemory();
     private int raftProgress;
     private GameStatus status;
     private GameEndReason gameEndReason;
@@ -107,6 +116,44 @@ public final class GameSession {
 
     public boolean isRaftReady() {
         return raftProgress >= 3;
+    }
+
+    public boolean isGhostPresenceTriggered(String plotId) {
+        return ghostAnchorsTriggered.contains(plotId);
+    }
+
+    public void markGhostPresenceTriggered(String plotId) {
+        if (plotId != null) {
+            ghostAnchorsTriggered.add(plotId);
+        }
+    }
+
+    public Set<String> getGhostAnchorsTriggered() {
+        return Collections.unmodifiableSet(ghostAnchorsTriggered);
+    }
+
+    public void recordGhostManifest(String plotId, String mode, String text) {
+        if (plotId != null) {
+            ghostManifestCounts.put(plotId, ghostManifestCounts.getOrDefault(plotId, 0) + 1);
+        }
+        this.lastGhostMode = mode == null ? "" : mode;
+        this.lastGhostText = text == null ? "" : text;
+    }
+
+    public int getGhostManifestCount(String plotId) {
+        return ghostManifestCounts.getOrDefault(plotId, 0);
+    }
+
+    public String getLastGhostMode() {
+        return lastGhostMode;
+    }
+
+    public String getLastGhostText() {
+        return lastGhostText;
+    }
+
+    public PlayerMemory getPlayerMemory() {
+        return playerMemory;
     }
 
     public static GameSession newSession() {

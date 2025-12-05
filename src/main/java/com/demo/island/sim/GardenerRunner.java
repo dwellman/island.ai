@@ -4,16 +4,17 @@ import com.demo.island.world.IslandCreationResult;
 import com.demo.island.world.IslandMap;
 import com.demo.island.world.IslandWorldBuilder;
 import com.demo.island.world.TerrainDifficulty;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import java.util.StringJoiner;
-import java.util.logging.Logger;
 
 /**
  * Simple entrypoint to run the Gardener actor and dump human-readable logs.
  */
 public final class GardenerRunner {
 
-    private static final Logger LOG = Logger.getLogger(GardenerRunner.class.getName());
+    private static final Logger LOG = LogManager.getLogger(GardenerRunner.class);
 
     private GardenerRunner() {
     }
@@ -42,8 +43,8 @@ public final class GardenerRunner {
 
         final int stepsCap = maxSteps;
         final long runSeed = seed;
-        LOG.info(() -> "=== Gardener Run ===");
-        LOG.info(() -> "maxSteps=" + stepsCap + " seed=" + runSeed);
+        LOG.info("=== Gardener Run ===");
+        LOG.info("maxSteps={} seed={}", stepsCap, runSeed);
         for (GardenerStepLog step : result.getSteps()) {
             String features = step.getTerrainFeatures().isEmpty()
                     ? "-"
@@ -52,8 +53,8 @@ public final class GardenerRunner {
                     .add(step.getPrimaryPlantFamily() == null ? "-" : step.getPrimaryPlantFamily().name())
                     .add(step.getPlantDensity() == null ? "-" : step.getPlantDensity().name())
                     .toString();
-            LOG.fine(() -> String.format(
-                    "step=%d dir=%s turn=%d->%d phase=%s plot=%s pos=(%d,%d) diff=%s safety=%s features=%s flora=%s outcome=%s timeCost=%d desc=\"%s\"",
+            LOG.debug(
+                    "step={} dir={} turn={} -> {} phase={} plot={} pos=({}, {}) diff={} safety={} features={} flora={} outcome={} timeCost={} desc=\"{}\"",
                     step.getStepNumber(),
                     step.getDirection(),
                     step.getTurnBefore(),
@@ -69,22 +70,22 @@ public final class GardenerRunner {
                     step.getMoveOutcome(),
                     step.getTimeCost(),
                     step.getPlotDescription()
-            ));
+            );
         }
 
-        LOG.info(() -> "--- Summary ---");
-        LOG.info(() -> "stepsTaken=" + result.getStepsTaken());
-        LOG.info(() -> "finalPlotId=" + result.getFinalPlotId());
-        LOG.info(() -> "finalTurn=" + result.getFinalTurnIndex() + " phase=" + result.getFinalPhase());
-        LOG.info(() -> "gameOver=" + result.isGameOver() + " reason=" + result.getGameOverReason());
-        LOG.info(() -> "uniquePlotsVisited=" + result.getUniquePlotsVisited());
+        LOG.info("--- Summary ---");
+        LOG.info("stepsTaken={}", result.getStepsTaken());
+        LOG.info("finalPlotId={}", result.getFinalPlotId());
+        LOG.info("finalTurn={} phase={}", result.getFinalTurnIndex(), result.getFinalPhase());
+        LOG.info("gameOver={} reason={}", result.isGameOver(), result.getGameOverReason());
+        LOG.info("uniquePlotsVisited={}", result.getUniquePlotsVisited());
         LOG.info(() -> "uniqueAnchorPlotsVisited=" + result.getUniqueAnchorPlotsVisited());
         for (TerrainDifficulty d : TerrainDifficulty.values()) {
-            LOG.fine(() -> "entered_" + d.name().toLowerCase() + "=" + result.getDifficultyEntries().getOrDefault(d, 0));
+            LOG.debug("entered_{}={}", d.name().toLowerCase(), result.getDifficultyEntries().getOrDefault(d, 0));
         }
-        LOG.fine(() -> "blockedNoTile=" + result.getBlockedNoTileCount());
-        LOG.fine(() -> "blockedBoundary=" + result.getBlockedBoundaryCount());
-        LOG.fine(() -> "blockedImpossible=" + result.getBlockedImpossibleCount());
-        LOG.fine(() -> "fatalDead=" + result.getFatalDeadCount());
+        LOG.debug("blockedNoTile={}", result.getBlockedNoTileCount());
+        LOG.debug("blockedBoundary={}", result.getBlockedBoundaryCount());
+        LOG.debug("blockedImpossible={}", result.getBlockedImpossibleCount());
+        LOG.debug("fatalDead={}", result.getFatalDeadCount());
     }
 }

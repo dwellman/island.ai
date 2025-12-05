@@ -12,16 +12,17 @@ import com.demo.island.world.Direction8;
 import com.demo.island.world.IslandTile;
 import com.demo.island.world.TerrainDifficulty;
 import com.demo.island.world.TileSafety;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import java.util.Optional;
-import java.util.logging.Logger;
 
 /**
  * Game-layer probe that plays simple actions with a CosmosClock.
  */
 public final class GardenerGameProbeRunner {
 
-    private static final Logger LOG = Logger.getLogger(GardenerGameProbeRunner.class.getName());
+    private static final Logger LOG = LogManager.getLogger(GardenerGameProbeRunner.class);
 
     private GardenerGameProbeRunner() {
     }
@@ -33,8 +34,8 @@ public final class GardenerGameProbeRunner {
         int actionCap = 500;
         GameEndReason reason = GameEndReason.NONE;
 
-        LOG.info(() -> "=== Gardener Game Probe ===");
-        LOG.info(() -> GameEngine.buildIntroMessage(clock));
+        LOG.info("=== Gardener Game Probe ===");
+        LOG.info(GameEngine.buildIntroMessage(clock));
         while (actionsTaken < actionCap && session.getStatus() == GameStatus.IN_PROGRESS) {
             IslandTile current = session.getMap().get(session.getLocation().getTileId()).orElseThrow();
             GameActionType actionType = chooseAction(session, current);
@@ -48,12 +49,8 @@ public final class GardenerGameProbeRunner {
             final int totalPips = clock.getTotalPips();
             final String plotIdSnapshot = session.getLocation().getTileId();
             final TerrainDifficulty diffSnapshot = session.getMap().get(plotIdSnapshot).orElseThrow().getDifficulty();
-            LOG.fine(() -> "action=" + actionSnapshot
-                    + " plot=" + plotIdSnapshot
-                    + " diff=" + diffSnapshot
-                    + " phase=" + phase
-                    + " totalPips=" + totalPips
-                    + " msg=" + result.getMessage());
+            LOG.debug("action={} plot={} diff={} phase={} totalPips={} msg={}",
+                    actionSnapshot, plotIdSnapshot, diffSnapshot, phase, totalPips, result.getMessage());
 
             if (session.getStatus() == GameStatus.WON) {
                 reason = GameEndReason.RAFT_LAUNCHED;

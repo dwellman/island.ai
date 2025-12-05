@@ -33,7 +33,7 @@ public final class WorldThingSeeder {
         player.getTags().add("PLAYER");
         index.registerThing(player);
 
-        CharacterThing ghost = new CharacterThing("THING_GHOST", "ghost", ThingKind.SUPERNATURAL, "T_OLD_RUINS");
+        CharacterThing ghost = new CharacterThing("THING_GHOST", "restless ghost", ThingKind.SUPERNATURAL, "T_OLD_RUINS");
         ghost.getAbilityScores().put(Ability.STR, 8);
         ghost.getAbilityScores().put(Ability.DEX, 12);
         ghost.getAbilityScores().put(Ability.CON, 8);
@@ -46,7 +46,7 @@ public final class WorldThingSeeder {
         ghost.setMaxHp(12);
         ghost.setMood(Mood.HAUNTING);
         ghost.getBehaviorTags().add("SUPERNATURAL");
-        ghost.getTags().addAll(Set.of("GHOST", "SUPERNATURAL"));
+        ghost.getTags().addAll(Set.of("GHOST", "SUPERNATURAL", "SPECTRAL", "NON_CORPOREAL"));
         ghost.getHomePlotIds().add("T_OLD_RUINS");
         ghost.getHomePlotIds().add("T_CAVE_ENTRANCE");
         index.registerThing(ghost);

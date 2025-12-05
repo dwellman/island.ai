@@ -53,6 +53,7 @@ public final class IslandGardener {
 
         applyFeatures(map);
         smoothDifficulty(map);
+        CaveLayouts.apply(map);
 
         return map;
     }

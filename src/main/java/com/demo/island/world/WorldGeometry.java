@@ -11,15 +11,15 @@ public final class WorldGeometry {
         ISLAND_ELIGIBLE
     }
 
-    // World envelope: x ∈ [-5,5], y ∈ [-1,9]
+    // World envelope: x ∈ [-5,6], y ∈ [-1,9]
     public static final int WORLD_MIN_X = -5;
-    public static final int WORLD_MAX_X = 5;
+    public static final int WORLD_MAX_X = 6;
     public static final int WORLD_MIN_Y = -1;
     public static final int WORLD_MAX_Y = 9;
 
-    // Island band: x ∈ [-4,4], y ∈ [0,8]
+    // Island band: x ∈ [-4,5], y ∈ [0,8] (room for the cave corridor)
     public static final int ISLAND_MIN_X = -4;
-    public static final int ISLAND_MAX_X = 4;
+    public static final int ISLAND_MAX_X = 5;
     public static final int ISLAND_MIN_Y = 0;
     public static final int ISLAND_MAX_Y = 8;
 

@@ -12,14 +12,10 @@ import com.demo.island.world.WorldFactory;
 
 import java.util.Scanner;
 import java.util.UUID;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 
 public final class ConsoleRunner {
 
     public static void main(String[] args) {
-        Logger.getLogger("").setLevel(Level.WARNING);
-
         GameRepository gameRepository = new InMemoryGameRepository();
         String sessionId = "session-" + UUID.randomUUID();
         WorldState worldState = WorldFactory.createDemoWorld(sessionId);

@@ -15,13 +15,13 @@ import com.demo.island.controller.GhostController;
 import com.demo.island.controller.HumanController;
 import com.demo.island.controller.MonkeyController;
 import com.demo.island.controller.PlayerAiController;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.stereotype.Component;
 
 import java.util.Scanner;
 import java.util.UUID;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 
 /**
  * Simple simulation runner that can use an AI player or console input based on a flag.
@@ -29,8 +29,8 @@ import java.util.logging.Logger;
 @Component
 public class SimulationRunner implements CommandLineRunner {
 
-    private static final Logger LOG = Logger.getLogger(SimulationRunner.class.getName());
-    private static final Logger SPECTATOR = Logger.getLogger("SPECTATOR");
+    private static final Logger LOG = LogManager.getLogger(SimulationRunner.class);
+    private static final Logger SPECTATOR = LogManager.getLogger("SPECTATOR");
 
     private final GameRepository gameRepository;
     private final DmAgent dmAgent;
@@ -52,9 +52,6 @@ public class SimulationRunner implements CommandLineRunner {
 
     @Override
     public void run(String... args) {
-        LOG.setLevel(Level.INFO);
-        SPECTATOR.setLevel(Level.INFO);
-
         String sessionId = "session-" + UUID.randomUUID();
         WorldState worldState = WorldFactory.createDemoWorld(sessionId);
         gameRepository.createNewSession(worldState);
@@ -72,7 +69,7 @@ public class SimulationRunner implements CommandLineRunner {
         ActorController ghostController = new GhostController(ghostId);
         ActorController monkeyController = new MonkeyController(monkeyId);
 
-        System.out.println("Simulation starting. AI player mode: " + useAiPlayer + ". Type commands or let AI drive. QUIT to exit.");
+        LOG.info("Simulation starting. AI player mode: {}. Type commands or let AI drive. QUIT to exit.", useAiPlayer);
 
         while (true) {
             int turnStart = worldState.getSession().getTurnNumber();
@@ -105,16 +102,16 @@ public class SimulationRunner implements CommandLineRunner {
             }
 
             if (worldState.getSession().getTurnNumber() >= worldState.getSession().getMaxTurns()) {
-                System.out.println("RESULT=MIDNIGHT_NO_RAFT (turn cap reached)");
+                LOG.info("RESULT=MIDNIGHT_NO_RAFT (turn cap reached)");
                 break;
             }
             if (worldState.getSession().getTurnNumber() >= turnCap) {
-                System.out.println("RESULT=SAFETY_STOP (turn cap)");
+                LOG.info("RESULT=SAFETY_STOP (turn cap)");
                 break;
             }
         }
 
-        System.out.println("Goodbye.");
+        LOG.info("Goodbye.");
     }
 
     private void logSpectator(WorldState worldState, String commandText, DmDecision decision) {
@@ -145,6 +142,6 @@ public class SimulationRunner implements CommandLineRunner {
                 .findFirst()
                 .orElse("");
 
-        System.out.println("ROUND t=%d phase=%s cmd=\"%s\" %s %s %s".formatted(turn, phase, commandText, ghostSummary, monkeySummary, checksSummary));
+        LOG.info("ROUND t={} phase={} cmd=\"{}\" {} {} {}", turn, phase, commandText, ghostSummary, monkeySummary, checksSummary);
     }
 }

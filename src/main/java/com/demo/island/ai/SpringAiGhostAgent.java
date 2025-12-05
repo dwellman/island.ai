@@ -10,10 +10,10 @@ import com.demo.island.ghost.GhostIntent;
 import com.demo.island.ghost.GhostIntentDto;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.springframework.ai.chat.client.ChatClient;
 import com.demo.island.tools.GhostTools;
-
-import java.util.logging.Logger;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+import org.springframework.ai.chat.client.ChatClient;
 
 /**
  * Ghost brain backed by Spring AI ChatClient. Uses ghost.prompt.md as system message and exchanges
@@ -21,7 +21,7 @@ import java.util.logging.Logger;
  */
 public final class SpringAiGhostAgent implements GhostAgent {
 
-    private static final Logger LOG = Logger.getLogger(SpringAiGhostAgent.class.getName());
+    private static final Logger LOG = LogManager.getLogger(SpringAiGhostAgent.class);
 
     private final ChatClient chatClient;
     private final GhostTools ghostTools;
@@ -46,7 +46,7 @@ public final class SpringAiGhostAgent implements GhostAgent {
         try {
             jsonInput = mapper.writeValueAsString(input.toDto());
         } catch (Exception e) {
-            LOG.warning("Failed to serialize Ghost input: " + e.getMessage());
+            LOG.warn("Failed to serialize Ghost input: {}", e.getMessage());
             GhostDecision fallback = new GhostDecision("Ghost is silent.", true);
             fallback.addError("Serialization error: " + e.getMessage());
             return fallback;
@@ -60,7 +60,7 @@ public final class SpringAiGhostAgent implements GhostAgent {
                     .call()
                     .content();
         } catch (Exception e) {
-            LOG.warning("Ghost agent call failed: " + e.getMessage());
+            LOG.warn("Ghost agent call failed: {}", e.getMessage());
             GhostDecision fallback = new GhostDecision("Ghost hesitates.", true);
             fallback.addError("Ghost agent call failed: " + e.getMessage());
             return fallback;
@@ -70,7 +70,7 @@ public final class SpringAiGhostAgent implements GhostAgent {
             GhostDecisionDto dto = mapper.readValue(response, GhostDecisionDto.class);
             return map(dto);
         } catch (Exception e) {
-            LOG.warning("Failed to parse Ghost response: " + e.getMessage());
+            LOG.warn("Failed to parse Ghost response: {}", e.getMessage());
             GhostDecision fallback = new GhostDecision("Ghost mutters aimlessly.", true);
             fallback.addError("Ghost response parse failed: " + e.getMessage());
             return fallback;

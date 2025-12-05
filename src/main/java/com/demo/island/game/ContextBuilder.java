@@ -23,9 +23,12 @@ public final class ContextBuilder {
     }
 
     public static PlotContext buildPlotContext(GameSession session) {
+        return buildPlotContext(session, session.getLocation().getTileId());
+    }
+
+    public static PlotContext buildPlotContext(GameSession session, String plotId) {
         PlotContext ctx = new PlotContext();
         IslandMap map = session.getMap();
-        String plotId = session.getLocation().getTileId();
         IslandTile tile = map.get(plotId).orElseThrow();
 
         ctx.plotId = tile.getTileId();

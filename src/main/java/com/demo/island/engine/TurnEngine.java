@@ -13,14 +13,15 @@ import com.demo.island.ghost.GhostInput;
 import com.demo.island.ghost.GhostIntent;
 import com.demo.island.engine.FlagTarget;
 import com.demo.island.engine.SetFlagChange;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.logging.Logger;
 
 public final class TurnEngine {
 
-    private static final Logger LOG = Logger.getLogger(TurnEngine.class.getName());
+    private static final Logger LOG = LogManager.getLogger(TurnEngine.class);
     private final DiceService diceService;
     private final CheckService checkService;
     private final java.util.List<com.demo.island.engine.check.CheckResult> recentCheckResults = new java.util.ArrayList<>();
@@ -61,14 +62,14 @@ public final class TurnEngine {
 
         for (StateChange change : dmDecision.getStateChanges()) {
             change.applyTo(worldState);
-            LOG.fine(() -> "Applied change: " + change.getClass().getSimpleName());
+            LOG.debug("Applied change: {}", change.getClass().getSimpleName());
         }
 
         if (dmDecision.isTurnConsumesTime()) {
             worldState.getSession().advanceTurn();
             updateTimePhase(worldState.getSession());
-            LOG.fine(() -> "Turn advanced to " + worldState.getSession().getTurnNumber()
-                    + " phase=" + worldState.getSession().getTimePhase());
+            LOG.debug("Turn advanced to {} phase={}", worldState.getSession().getTurnNumber(),
+                    worldState.getSession().getTimePhase());
             if (autoProcessCreatures) {
                 runGhostTurn(worldState);
                 runMonkeyTurn(worldState);
@@ -116,7 +117,7 @@ public final class TurnEngine {
         });
 
         if (!decision.getHints().isEmpty() || !decision.getErrors().isEmpty()) {
-            LOG.fine(() -> "Ghost hints/errors: " + decision.getHints() + " / " + decision.getErrors());
+            LOG.debug("Ghost hints/errors: {} / {}", decision.getHints(), decision.getErrors());
         }
     }
 
@@ -141,7 +142,7 @@ public final class TurnEngine {
 
         if (decision.getDailyPhase() != null) {
             // simple mode recording as flag if needed in future; currently just logged
-            LOG.fine(() -> "Monkeys mode: " + decision.getDailyPhase());
+            LOG.debug("Monkeys mode: {}", decision.getDailyPhase());
         }
         if (decision.getTargetTileId() != null) {
             monkey.setTargetTileId(decision.getTargetTileId());
@@ -178,7 +179,7 @@ public final class TurnEngine {
         });
 
         if (!decision.getHints().isEmpty() || !decision.getErrors().isEmpty()) {
-            LOG.fine(() -> "Monkey hints/errors: " + decision.getHints() + " / " + decision.getErrors());
+            LOG.debug("Monkey hints/errors: {} / {}", decision.getHints(), decision.getErrors());
         }
     }
 
@@ -192,7 +193,7 @@ public final class TurnEngine {
     private void runGhostStub(WorldState worldState) {
         GameSession.TimePhase phase = worldState.getSession().getTimePhase();
         if (phase == GameSession.TimePhase.LIGHT) {
-            LOG.fine(() -> "Ghost idle/wandering during LIGHT phase.");
+            LOG.debug("Ghost idle/wandering during LIGHT phase.");
             return;
         }
 
@@ -211,12 +212,12 @@ public final class TurnEngine {
                     if (result.isSuccess()) {
                         String targetTile = firstPlayerTile(worldState);
                         ghost.setTargetTileId(targetTile);
-                        LOG.fine(() -> "Ghost heard activity. Target tile set to " + targetTile);
+                        LOG.debug("Ghost heard activity. Target tile set to {}", targetTile);
                         logActorEvent(worldState, ghost.getCreatureId(), targetTile,
                                 "GHOST_HEARD_SHOUT", null,
                                 "Ghost heard activity near " + targetTile);
                     } else {
-                        LOG.fine(() -> "Ghost heard nothing. Keeps current target.");
+                        LOG.debug("Ghost heard nothing. Keeps current target.");
                     }
                 });
     }
@@ -227,7 +228,7 @@ public final class TurnEngine {
                 com.demo.island.core.Creature creature = worldState.getCreature(intent.getCreatureId());
                 if (creature != null) {
                     creature.setTargetTileId(intent.getTargetTileId());
-                    LOG.fine(() -> "Ghost sets target tile to " + intent.getTargetTileId());
+                    LOG.debug("Ghost sets target tile to {}", intent.getTargetTileId());
                 }
             }
             case CHECK -> {

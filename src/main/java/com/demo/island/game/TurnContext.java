@@ -27,4 +27,11 @@ public final class TurnContext {
 
     public Challenge lastChallenge;
     public ChallengeResult lastChallengeResult;
+
+    public boolean ghostEventTriggered;
+    public String ghostEventPlotId;
+    public String ghostEventText;
+    public String ghostEventReason;
+    public String ghostMode;
+    public String ghostText;
 }

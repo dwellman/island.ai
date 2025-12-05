@@ -23,7 +23,7 @@ class WorldGeometryTest {
     void envelopeClassification() {
         assertThat(WorldGeometry.isInsideWorldEnvelope(new Position(0, 0))).isTrue();
         assertThat(WorldGeometry.isInsideWorldEnvelope(new Position(-5, -1))).isTrue();
-        assertThat(WorldGeometry.isInsideWorldEnvelope(new Position(5, 9))).isTrue();
+        assertThat(WorldGeometry.isInsideWorldEnvelope(new Position(6, 9))).isTrue();
         assertThat(WorldGeometry.isInsideWorldEnvelope(new Position(-6, 0))).isFalse();
         assertThat(WorldGeometry.isInsideWorldEnvelope(new Position(0, 10))).isFalse();
     }
@@ -32,7 +32,8 @@ class WorldGeometryTest {
     void islandBandClassification() {
         assertThat(WorldGeometry.classify(new Position(0, 0))).isEqualTo(WorldGeometry.Classification.ISLAND_ELIGIBLE);
         assertThat(WorldGeometry.classify(new Position(4, 8))).isEqualTo(WorldGeometry.Classification.ISLAND_ELIGIBLE);
-        assertThat(WorldGeometry.classify(new Position(5, 0))).isEqualTo(WorldGeometry.Classification.BOUNDARY);
+        assertThat(WorldGeometry.classify(new Position(5, 0))).isEqualTo(WorldGeometry.Classification.ISLAND_ELIGIBLE);
+        assertThat(WorldGeometry.classify(new Position(6, 0))).isEqualTo(WorldGeometry.Classification.BOUNDARY);
         assertThat(WorldGeometry.classify(new Position(0, -1))).isEqualTo(WorldGeometry.Classification.BOUNDARY);
         assertThat(WorldGeometry.classify(new Position(0, 9))).isEqualTo(WorldGeometry.Classification.BOUNDARY);
     }
@@ -62,7 +63,7 @@ class WorldGeometryTest {
 
     @Test
     void eastFromRightEdgeIsOffWorld() {
-        Position edge = new Position(5, 5);
+        Position edge = new Position(6, 5);
         assertThat(WorldGeometry.classify(edge)).isEqualTo(WorldGeometry.Classification.BOUNDARY);
         assertThat(WorldGeometry.classify(WorldGeometry.apply(edge, Direction8.E))).isEqualTo(WorldGeometry.Classification.OFF_WORLD);
         assertThat(WorldGeometry.classify(WorldGeometry.apply(edge, Direction8.NE))).isEqualTo(WorldGeometry.Classification.OFF_WORLD);

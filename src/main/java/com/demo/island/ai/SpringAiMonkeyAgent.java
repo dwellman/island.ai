@@ -9,12 +9,12 @@ import com.demo.island.monkey.MonkeyDecisionDto;
 import com.demo.island.monkey.MonkeyInput;
 import com.demo.island.monkey.MonkeyIntent;
 import com.demo.island.monkey.MonkeyIntentDto;
+import com.demo.island.tools.MonkeyTools;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.springframework.ai.chat.client.ChatClient;
-import com.demo.island.tools.MonkeyTools;
-
-import java.util.logging.Logger;
 
 /**
  * Monkey brain backed by Spring AI ChatClient. Uses monkey.brain.prompt.md as system message and exchanges
@@ -22,7 +22,7 @@ import java.util.logging.Logger;
  */
 public final class SpringAiMonkeyAgent implements MonkeyAgent {
 
-    private static final Logger LOG = Logger.getLogger(SpringAiMonkeyAgent.class.getName());
+    private static final Logger LOG = LogManager.getLogger(SpringAiMonkeyAgent.class);
 
     private final ChatClient chatClient;
     private final MonkeyTools monkeyTools;
@@ -54,7 +54,7 @@ public final class SpringAiMonkeyAgent implements MonkeyAgent {
                     input.getWorldState().getTiles().containsKey("T_VINES") ? "T_VINES" : ""
             ));
         } catch (Exception e) {
-            LOG.warning("Failed to serialize Monkey input: " + e.getMessage());
+            LOG.warn("Failed to serialize Monkey input: {}", e.getMessage());
             MonkeyDecision fallback = new MonkeyDecision("Monkeys hesitate.", true);
             fallback.addError("Serialization error: " + e.getMessage());
             return fallback;
@@ -68,7 +68,7 @@ public final class SpringAiMonkeyAgent implements MonkeyAgent {
                     .call()
                     .content();
         } catch (Exception e) {
-            LOG.warning("Monkey agent call failed: " + e.getMessage());
+            LOG.warn("Monkey agent call failed: {}", e.getMessage());
             MonkeyDecision fallback = new MonkeyDecision("Monkeys idle.", true);
             fallback.addError("Monkey agent call failed: " + e.getMessage());
             return fallback;
@@ -78,7 +78,7 @@ public final class SpringAiMonkeyAgent implements MonkeyAgent {
             MonkeyDecisionDto dto = mapper.readValue(response, MonkeyDecisionDto.class);
             return map(dto);
         } catch (Exception e) {
-            LOG.warning("Failed to parse Monkey response: " + e.getMessage());
+            LOG.warn("Failed to parse Monkey response: {}", e.getMessage());
             MonkeyDecision fallback = new MonkeyDecision("Monkeys chatter incoherently.", true);
             fallback.addError("Monkey response parse failed: " + e.getMessage());
             return fallback;

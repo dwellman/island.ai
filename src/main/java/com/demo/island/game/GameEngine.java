@@ -8,17 +8,23 @@ import com.demo.island.world.TerrainDifficulty;
 import com.demo.island.world.TileSafety;
 import com.demo.island.world.WorldGeometry;
 import com.demo.island.world.WorldThingIndex;
+import com.demo.island.world.ItemThing;
 import com.demo.island.world.CharacterThing;
 import com.demo.island.world.Thing;
+import com.demo.island.game.ghost.GhostAgentRegistry;
+import com.demo.island.game.ghost.GhostManifestation;
+import com.demo.island.game.ghost.GhostMode;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
+import java.util.Locale;
 import java.util.EnumMap;
 import java.util.Map;
 import java.util.Optional;
-import java.util.logging.Logger;
 
 public final class GameEngine {
 
-    private static final Logger LOG = Logger.getLogger(GameEngine.class.getName());
+    private static final Logger LOG = LogManager.getLogger(GameEngine.class);
     private static ChallengeResolver challengeResolver = new ChallengeResolver(new DiceService());
     private static DmAdapter dmAdapter = new DefaultDmAdapter();
 
@@ -39,7 +45,7 @@ public final class GameEngine {
 
     public static GameActionResult perform(GameSession session, GameAction action) {
         if (session.getStatus() != GameStatus.IN_PROGRESS) {
-            TurnContext ctx = TurnContextBuilder.build(session, action, "Game is over.", false, null, null);
+            TurnContext ctx = TurnContextBuilder.build(session, action, "Game is over.", false, null, null, null);
             String body = dmAdapter.narrate(ctx);
             return new GameActionResult(false, prefix(session) + " " + body, ctx);
         }
@@ -75,7 +81,15 @@ public final class GameEngine {
             default -> outcome = new ActionOutcome(false, "Action not supported.", null, null);
         }
 
-        TurnContext ctx = TurnContextBuilder.build(session, action, outcome.resultSummary, outcome.success, outcome.challenge, outcome.challengeResult);
+        GhostPresenceEvent ghostEvent = GhostPresenceTracker.maybeTrigger(session, outcome.success).orElse(null);
+        if (ghostEvent != null) {
+            GhostManifestation manifest = GhostAgentRegistry.manifest(session, ghostEvent);
+            GhostMode mode = manifest != null && manifest.mode() != null ? manifest.mode() : GhostMode.PRESENCE_ONLY;
+            String text = manifest != null ? manifest.text() : "";
+            ghostEvent = new GhostPresenceEvent(ghostEvent.plotId(), ghostEvent.eventText(), ghostEvent.reason(), mode, text);
+            session.recordGhostManifest(ghostEvent.plotId(), mode.name(), text);
+        }
+        TurnContext ctx = TurnContextBuilder.build(session, action, outcome.resultSummary, outcome.success, outcome.challenge, outcome.challengeResult, ghostEvent);
         String body = dmAdapter.narrate(ctx);
         String message = prefix(session) + " " + body;
         return new GameActionResult(outcome.success, message, ctx);
@@ -110,7 +124,7 @@ public final class GameEngine {
         applyTime(session, timeCost);
         MonkeyPooOutcome poo = maybeMonkeyPoo(session);
         checkOutOfTime(session);
-        LOG.fine(() -> "Moved " + dir + " to " + target.getTileId() + " cost=" + timeCost + " totalPips=" + session.getClock().getTotalPips());
+        LOG.debug("Moved {} to {} cost={} totalPips={}", dir, target.getTileId(), timeCost, session.getClock().getTotalPips());
         Challenge challenge = poo.triggered ? poo.challenge : null;
         ChallengeResult challengeResult = poo.triggered ? poo.result : null;
         return new ActionOutcome(true, "You move " + dir + ".", challenge, challengeResult);
@@ -121,18 +135,36 @@ public final class GameEngine {
         if (item == null) {
             return new ActionOutcome(false, "Pick up what?", null, null);
         }
+        String playerId = "THING_PLAYER";
+        WorldThingIndex index = session.getThingIndex();
+        if (isItemCarriedByPlayer(index, item, playerId) || session.getInventory().getOrDefault(item, 0) > 0) {
+            return new ActionOutcome(false, "You are already carrying that.", null, null);
+        }
+
+        ItemThing thing = findItemInPlot(index, session.getLocation().getTileId(), item);
+        if (thing != null) {
+            index.moveThing(thing.getId(), null);
+            thing.setCarriedByCharacterId(playerId);
+            session.getInventory().put(item, session.getInventory().getOrDefault(item, 0) + 1);
+            applyTime(session, GameActionCost.timeCost(GameActionType.PICK_UP, currentDiff(session)));
+            checkOutOfTime(session);
+            String name = thing.getName() == null ? item.name().toLowerCase(Locale.ROOT) : thing.getName();
+            return new ActionOutcome(true, "You pick up the " + name + ".", null, null);
+        }
+
+        // Fallback to legacy plot resources (discovered caches)
         PlotResources res = session.getPlotResources().get(session.getLocation().getTileId());
         if (res == null || !res.isDiscovered()) {
             return new ActionOutcome(false, "You haven't found any items here.", null, null);
         }
         if (!res.has(item)) {
-            return new ActionOutcome(false, "No such item here.", null, null);
+            return new ActionOutcome(false, "You haven't found any items here.", null, null);
         }
         res.take(item);
         session.getInventory().put(item, session.getInventory().getOrDefault(item, 0) + 1);
         applyTime(session, GameActionCost.timeCost(GameActionType.PICK_UP, currentDiff(session)));
         checkOutOfTime(session);
-        return new ActionOutcome(true, "Picked up " + item, null, null);
+        return new ActionOutcome(true, "You pick up the " + item.name().toLowerCase(Locale.ROOT).replace('_', ' '), null, null);
     }
 
     private static ActionOutcome handleDrop(GameSession session, GameAction action) {
@@ -140,16 +172,28 @@ public final class GameEngine {
         if (item == null) {
             return new ActionOutcome(false, "Drop what?", null, null);
         }
+        String playerId = "THING_PLAYER";
         int invCount = session.getInventory().getOrDefault(item, 0);
-        if (invCount <= 0) {
+        ItemThing carried = findCarriedItem(session.getThingIndex(), item, playerId);
+        if (invCount <= 0 && carried == null) {
             return new ActionOutcome(false, "You don't have that.", null, null);
         }
-        session.getInventory().put(item, invCount - 1);
-        PlotResources res = session.getPlotResources().computeIfAbsent(session.getLocation().getTileId(), k -> new PlotResources(true));
-        res.drop(item);
+        if (invCount > 0) {
+            session.getInventory().put(item, Math.max(0, invCount - 1));
+        }
+        if (carried != null) {
+            session.getThingIndex().moveThing(carried.getId(), session.getLocation().getTileId());
+            carried.setCarriedByCharacterId(null);
+        } else {
+            PlotResources res = session.getPlotResources().computeIfAbsent(session.getLocation().getTileId(), k -> new PlotResources(true));
+            res.drop(item);
+        }
         applyTime(session, GameActionCost.timeCost(GameActionType.DROP, currentDiff(session)));
         checkOutOfTime(session);
-        return new ActionOutcome(true, "Dropped " + item, null, null);
+        String name = carried != null && carried.getName() != null
+                ? carried.getName()
+                : item.name().toLowerCase(Locale.ROOT).replace('_', ' ');
+        return new ActionOutcome(true, "You drop the " + name + ".", null, null);
     }
 
     private static ActionOutcome handleJump(GameSession session, GameAction action) {
@@ -254,6 +298,32 @@ public final class GameEngine {
         session.setStatus(GameStatus.WON);
         session.setGameEndReason(GameEndReason.RAFT_LAUNCHED);
         return new ActionOutcome(true, "You push off and launch the raft!", null, null);
+    }
+
+    private static ItemThing findItemInPlot(WorldThingIndex index, String plotId, GameItemType type) {
+        if (plotId == null || type == null) return null;
+        return index.getThingsInPlot(plotId).stream()
+                .filter(ItemThing.class::isInstance)
+                .map(ItemThing.class::cast)
+                .filter(it -> it.getItemType() == type)
+                .filter(it -> it.getCarriedByCharacterId() == null)
+                .findFirst()
+                .orElse(null);
+    }
+
+    private static ItemThing findCarriedItem(WorldThingIndex index, GameItemType type, String playerId) {
+        if (type == null) return null;
+        return index.getAll().values().stream()
+                .filter(ItemThing.class::isInstance)
+                .map(ItemThing.class::cast)
+                .filter(it -> it.getItemType() == type)
+                .filter(it -> playerId.equals(it.getCarriedByCharacterId()))
+                .findFirst()
+                .orElse(null);
+    }
+
+    private static boolean isItemCarriedByPlayer(WorldThingIndex index, GameItemType type, String playerId) {
+        return findCarriedItem(index, type, playerId) != null;
     }
 
     private static MonkeyPooOutcome maybeMonkeyPoo(GameSession session) {

@@ -21,6 +21,7 @@ public final class IslandTile {
     private final TileContext context;
     private final java.util.Set<String> thingsPresent;
     private final java.util.Set<String> thingsAnchoredHere;
+    private String playerMemoryNote = "";
 
     public IslandTile(String tileId, TileKind kind, Position position, String biome, String region, String elevation,
                       TerrainDifficulty difficulty, TileSafety safety, boolean walkable,
@@ -109,5 +110,13 @@ public final class IslandTile {
 
     public java.util.Set<String> getThingsAnchoredHere() {
         return thingsAnchoredHere;
+    }
+
+    public String getPlayerMemoryNote() {
+        return playerMemoryNote == null ? "" : playerMemoryNote;
+    }
+
+    public void setPlayerMemoryNote(String playerMemoryNote) {
+        this.playerMemoryNote = playerMemoryNote == null ? "" : playerMemoryNote.trim();
     }
 }
